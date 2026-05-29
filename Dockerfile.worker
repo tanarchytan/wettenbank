@@ -1,0 +1,24 @@
+FROM oven/bun:1 AS base
+
+WORKDIR /app
+
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends cron tini \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY package.json bun.lock tsconfig.json ./
+RUN bun install --frozen-lockfile
+
+COPY src ./src
+COPY bin ./bin
+COPY migrations ./migrations
+
+RUN echo "0 4 * * * cd /app && /usr/local/bin/bun run bin/sync-delta.ts >> /proc/1/fd/1 2>&1" > /etc/cron.d/wetten \
+ && chmod 0644 /etc/cron.d/wetten \
+ && crontab /etc/cron.d/wetten
+
+COPY bin/cron.sh /usr/local/bin/cron.sh
+RUN chmod +x /usr/local/bin/cron.sh
+
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["/usr/local/bin/cron.sh"]

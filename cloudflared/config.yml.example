@@ -1,0 +1,11 @@
+# cloudflared tunnel config. Token-based connector mode preferred — set CF_TUNNEL_TOKEN env.
+# This file is OPTIONAL when using token mode (the dashboard configures ingress).
+# Keep this template for git-versioned config if you switch to credentials-file mode.
+
+tunnel: <your-tunnel-uuid>
+credentials-file: /etc/cloudflared/<your-tunnel-uuid>.json
+
+ingress:
+  - hostname: wetten.ai
+    service: http://app:3000
+  - service: http_status:404

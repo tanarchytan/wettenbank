@@ -1,0 +1,57 @@
+{
+  "name": "wettenbank-online",
+  "version": "0.1.0",
+  "description": "Onafhankelijke mirror van het Nederlandse Basis Wetten Bestand (BWB) met ELI-URLs, Dutch FTS, en uitgebreid zoeken.",
+  "author": "David Gillot <David@Gillot.EU>",
+  "license": "MIT",
+  "homepage": "https://wettenbank.online",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tanarchytan/wettenbank.git"
+  },
+  "bugs": {
+    "url": "https://github.com/tanarchytan/wettenbank/issues"
+  },
+  "keywords": [
+    "wetten",
+    "bwb",
+    "eli",
+    "koop",
+    "basis-wetten-bestand",
+    "dutch-law",
+    "legislation",
+    "postgres",
+    "nextjs",
+    "bun"
+  ],
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build:css": "bun x tailwindcss -i ./app/globals.css -o ./public/styles.css --minify",
+    "build:css:watch": "bun x tailwindcss -i ./app/globals.css -o ./public/styles.css --watch",
+    "dev": "bun --bun next dev -p 3000",
+    "build": "bun run build:css && bun --bun next build",
+    "start": "bun --bun next start -p 3000",
+    "migrate": "bun run bin/migrate.ts",
+    "bulk-import": "bun run bin/bulk-import.ts",
+    "sync-delta": "bun run bin/sync-delta.ts",
+    "test": "bun test",
+    "test:unit": "bun test test/unit",
+    "test:integration": "bun test test/integration"
+  },
+  "dependencies": {
+    "@react-pdf/renderer": "^4.5.1",
+    "fast-xml-parser": "^4.5.0",
+    "next": "^16.2.6",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "server-only": "^0.0.1"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "tailwindcss": "3",
+    "typescript": "^6.0.3"
+  }
+}

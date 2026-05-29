@@ -1,0 +1,13 @@
+node_modules
+.env
+.env.local
+.git
+docs/
+test/
+*.md
+pgdata/
+wetten/
+.next/
+bench-out/
+test/tmp/
+tsconfig.tsbuildinfo

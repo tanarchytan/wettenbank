@@ -1,0 +1,23 @@
+node_modules/
+.env
+.env.local
+*.log
+.DS_Store
+dist/
+pgdata/
+test/fixtures/*.xml
+/bench-out/
+/wetten/
+/test/tmp/
+.next/
+tsconfig.tsbuildinfo
+
+# IDE configs
+.vscode/
+.idea/
+
+# KOOP-eigen HTML reference samples (alleen lokaal)
+Examples/
+
+# Volledige docs-folder privé (bevat security-rapport, conversion-stats etc.)
+docs/
