@@ -83,6 +83,30 @@ Resultaat per 12u run na initial pass (~5 000 due BWBs ipv 45 k):
 - 5% updated → ~25 MB bandbreedte
 - Totaal ~7 min runtime, <30 MB transfer
 
+### Corpus delta-sync (`bin/sync-corpus.ts`)
+
+De markdown-corpus repo (zie wettenbank-corpus) wordt in sync gehouden via DB-audit. Eén CLI doet alles:
+
+```bash
+bun run bin/sync-corpus.ts --out ../wettenbank-corpus --since 24h --commit --push
+```
+
+Flow:
+1. Query `regulation_state.ingested_at > now() - 24h` → ~50 BWBs typisch
+2. Per BWB: laad alle states uit DB, render markdown via bestaande `regulation-summary.ts`
+3. Schrijf state-md files + README.md (versie-tabel) naar corpus-dir
+4. `git add . && git commit -m "Delta YYYY-MM-DD: N regulations / M states" && git push`
+
+Typische run: 32 BWBs → 1823 state-files + 32 README's in ~3 min, ~5 MB I/O. **Geen** full rebuild van 154 k files.
+
+Aanbevolen cron op host (1u buffer na `koop-bwb-sync`):
+
+```cron
+30 1,13 * * * cd /pad/naar/wettenbank && bun run bin/sync-corpus.ts --out ../wettenbank-corpus --since 24h --commit --push
+```
+
+Host-side ipv in worker-container omdat git push SSH-credentials op host gebruikt.
+
 ## App draaien
 
 ```bash
