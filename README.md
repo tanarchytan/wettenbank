@@ -43,15 +43,45 @@ bun run bulk-import --dir /pad/naar/wetten --concurrency 4
 
 Throughput: ~30 regs/sec → 45 k entiteiten in ~25 min.
 
-### Delta sync
+### Delta sync (twice-daily, via FRBR-feed)
 
-Dagelijks via cron in de worker-container (04:00). Handmatige trigger:
+De primary delta-updater draait elke 12u via `bin/koop-bwb-sync.ts`. Bron is de KOOP FRBR-feed:
+
+```
+https://repository.officiele-overheidspublicaties.nl/bwb/<BWBR>/manifest.xml
+```
+
+Werkflow per BWB:
+1. `GET manifest.xml` met `If-Modified-Since` header
+2. **304 Not Modified** → done (95% of cases na initial pass)
+3. **200 OK** → diff manifest-expressions vs DB-states, alleen missende states downloaden
+4. Parse XML door bestaande `parse-bwb-xml.ts` + `upsertRegulation`
+
+Cron in de worker-container draait om 00:00 en 12:00 dagelijks. Handmatige trigger:
 
 ```bash
-docker compose --profile worker exec worker bun run bin/sync-delta.ts
+docker compose --profile worker exec worker bun run bin/koop-bwb-sync.ts --concurrency 4
 ```
 
 Wijzigingen triggeren Cloudflare cache-purge per BWB-id zodra `CF_API_TOKEN` + `CF_ZONE_ID` zijn gezet.
+
+#### Tier-based scheduling
+
+Na de initial 45 k pass valt de request-load met factor ~8 doordat BWBs in frequentie-tiers ingedeeld worden:
+
+| Tier | Criterium | Check-interval |
+|---|---|---|
+| 1 (actief) | <30 dagen sinds laatste change | 12u |
+| 2 (regelmatig) | 30-365 dagen | 3 dagen |
+| 3 (stabiel) | 1-5 jaar | 14 dagen |
+| 4 (dormant) | >5 jaar | 30 dagen |
+
+Bij elke detected change springt een BWB terug naar tier 1 voor 14 dagen.
+
+Resultaat per 12u run na initial pass (~5 000 due BWBs ipv 45 k):
+- 95% 304s → 0 bytes
+- 5% updated → ~25 MB bandbreedte
+- Totaal ~7 min runtime, <30 MB transfer
 
 ## App draaien
 
