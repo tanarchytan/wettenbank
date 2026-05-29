@@ -12,6 +12,13 @@ test/fixtures/*.xml
 .next/
 tsconfig.tsbuildinfo
 
+# Database/backup archieven (kunnen GB groot zijn, niet voor git)
+*.tar.gz
+*.tar
+*.7z
+*.zip
+*.sql.gz
+
 # IDE configs
 .vscode/
 .idea/

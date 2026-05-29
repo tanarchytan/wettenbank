@@ -1,0 +1,13 @@
+Contact: mailto:David@Gillot.EU
+Expires: 2027-05-29T09:43:53.000Z
+Preferred-Languages: nl, en
+Canonical: https://wettenbank.online/.well-known/security.txt
+Policy: https://wettenbank.online/privacy
+
+# Wettenbank.online is een onafhankelijke mirror van het Basis Wetten
+# Bestand (BWB). Beveiligingsmeldingen zijn welkom — neem direct contact
+# op met David@Gillot.EU. We reageren binnen 5 werkdagen.
+#
+# Scope: alleen kwetsbaarheden in onze code (Next.js viewer, ingest-pipeline,
+# Postgres setup). Voor inhoud van een regeling: neem contact op met KOOP via
+# wetten@overheid.nl — wij zijn de mirror, niet de bron.

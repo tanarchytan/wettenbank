@@ -16,7 +16,7 @@ COPY bin ./bin
 
 ENV NEXT_TELEMETRY_DISABLED=1
 # Compile Tailwind CSS first (avoids Next 16/Turbopack CSS pipeline issues), then build Next.
-RUN bun x tailwindcss -i ./app/globals.css -o ./public/styles.css --minify
+RUN bun x @tailwindcss/cli -i ./app/globals.css -o ./public/styles.css --minify
 RUN bun --bun next build
 
 ENV NODE_ENV=production

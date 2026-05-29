@@ -32,7 +32,7 @@ export default function ContactPage() {
           <a href="/security" className="text-rijks-link hover:underline">security-beleid</a>
         </li>
         <li>
-          <strong>E-mail</strong>: <a href="mailto:contact@wettenbank.online" className="text-rijks-link hover:underline">contact@wettenbank.online</a>
+          <strong>E-mail</strong>: <a href="mailto:David@Gillot.EU" className="text-rijks-link hover:underline">David@Gillot.EU</a>
         </li>
       </ul>
 

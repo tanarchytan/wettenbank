@@ -45,8 +45,8 @@ export default function ToegankelijkheidPage() {
       <DocH2>Probleem melden</DocH2>
       <p>
         Ondervind je een toegankelijkheidsprobleem? Mail{" "}
-        <a href="mailto:toegankelijkheid@wettenbank.online" className="text-rijks-link hover:underline">
-          toegankelijkheid@wettenbank.online
+        <a href="mailto:David@Gillot.EU" className="text-rijks-link hover:underline">
+          David@Gillot.EU
         </a>{" "}
         — we reageren binnen 5 werkdagen.
       </p>

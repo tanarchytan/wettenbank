@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+
+# Zoekresultaat-pagina's hebben query-strings; geen waarde voor crawlers.
+Disallow: /zoeken?
+Disallow: /uitgebreid_zoeken?
+
+# API-endpoints zijn niet voor crawlers.
+Disallow: /api/
+
+Sitemap: https://wettenbank.online/sitemap.xml
