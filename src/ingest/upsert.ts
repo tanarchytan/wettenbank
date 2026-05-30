@@ -39,11 +39,15 @@ export async function upsertRegulation(p: ParsedRegulation): Promise<UpsertResul
       ON CONFLICT (bwb_id) DO UPDATE SET
         eli_uri      = EXCLUDED.eli_uri,
         type         = EXCLUDED.type,
-        ministry     = EXCLUDED.ministry,
         geo_scope    = EXCLUDED.geo_scope,
         title        = EXCLUDED.title,
-        abbreviation = EXCLUDED.abbreviation,
-        citetitle    = EXCLUDED.citetitle
+        -- ministry/abbreviation/citetitle komen uit de WTI, niet uit de state-XML.
+        -- De KOOP delta-sync fetcht alleen state-XML -> die velden zijn dan null.
+        -- coalesce zodat een state-only upsert de (ge-backfillde) metadata NIET
+        -- wist. Volle dump-ingest levert ze wel non-null aan en overschrijft dus.
+        ministry     = coalesce(EXCLUDED.ministry, regulation.ministry),
+        abbreviation = coalesce(EXCLUDED.abbreviation, regulation.abbreviation),
+        citetitle    = coalesce(EXCLUDED.citetitle, regulation.citetitle)
     `;
     const regulationInserted = regBefore.length === 0;
 

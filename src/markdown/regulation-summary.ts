@@ -52,9 +52,13 @@ export function stateMarkdown(
       ? reg.states[stateIdx + 1]!.validFrom
       : null;
 
+  // Dump-ingest levert sourceXmlPath (lokaal pad); de DB-driven delta-sync niet.
+  // Reconstrueer dan het canonieke, deterministische dump-relatieve pad zodat de
+  // `source`-frontmatter consistent blijft met de rest van de corpus
+  // (wetten/<bwb>/<from>_0/xml/<bwb>_<from>_0.xml) i.p.v. een lege string.
   const relSource = state.sourceXmlPath
-    .replace(/\\/g, "/")
-    .replace(/^.*?(wetten\/)/, "wetten/");
+    ? state.sourceXmlPath.replace(/\\/g, "/").replace(/^.*?(wetten\/)/, "wetten/")
+    : `wetten/${reg.bwbId}/${state.validFrom}_0/xml/${reg.bwbId}_${state.validFrom}_0.xml`;
 
   const fm = frontmatter({
     bwb_id: reg.bwbId,

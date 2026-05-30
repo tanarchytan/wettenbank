@@ -38,6 +38,7 @@ interface Args {
   since: string;
   commit: boolean;
   push: boolean;
+  only: string | null;
 }
 
 function parseCli(): Args {
@@ -47,11 +48,12 @@ function parseCli(): Args {
       since:  { type: "string", default: "24h" },
       commit: { type: "boolean", default: false },
       push:   { type: "boolean", default: false },
+      only:   { type: "string" },  // render alleen deze BWBR (test/gericht)
     },
     strict: true,
   });
   if (!values.out) {
-    console.error("Usage: bun run bin/sync-corpus.ts --out <corpus-dir> [--since 24h] [--commit] [--push]");
+    console.error("Usage: bun run bin/sync-corpus.ts --out <corpus-dir> [--since 24h] [--commit] [--push] [--only BWBR...]");
     process.exit(2);
   }
   return {
@@ -59,6 +61,7 @@ function parseCli(): Args {
     since: (values.since as string) ?? "24h",
     commit: values.commit === true,
     push: values.push === true,
+    only: (values.only as string) || null,
   };
 }
 
@@ -93,7 +96,18 @@ async function affectedBwbIds(sinceInterval: string): Promise<string[]> {
   return rows.map((r) => r.bwb_id);
 }
 
-async function loadRegulationFromDb(bwbId: string): Promise<LoadedRegulation | null> {
+/**
+ * Laad regulation + state-METADATA (geen body_xml/body_text/articles). Goedkoop,
+ * ook voor reuzen als BWBR0018715 (602 states / 9.7 GB XML). De bodies worden
+ * per state on-demand geladen tijdens het renderen (zie loadStateBody) zodat
+ * het geheugen begrensd blijft tot één state tegelijk — anders OOM/Bun-crash.
+ *
+ * Returnt de LoadedRegulation (states met lege bodies) + per-state state_id's
+ * in dezelfde volgorde.
+ */
+async function loadRegulationMeta(
+  bwbId: string,
+): Promise<{ reg: LoadedRegulation; stateIds: number[] } | null> {
   const sql = getDb();
   const [reg] = await sql<{
     bwb_id: string; eli_uri: string; type: string; ministry: string | null;
@@ -105,25 +119,17 @@ async function loadRegulationFromDb(bwbId: string): Promise<LoadedRegulation | n
   if (!reg) return null;
 
   const stateRows = await sql<{
-    state_id: number; valid_from: Date; valid_to: Date;
-    body_xml: string; body_text: string; title_snapshot: string;
+    state_id: number; valid_from: Date; valid_to: Date; title_snapshot: string;
   }[]>`
-    SELECT state_id, valid_from, valid_to, body_xml::text AS body_xml, body_text, title_snapshot
+    SELECT state_id, valid_from, valid_to, title_snapshot
     FROM regulation_state WHERE bwb_id = ${bwbId}
     ORDER BY valid_from ASC
   `;
 
-  const states: LoadedState[] = [];
-  for (const s of stateRows) {
-    const articleRows = await sql<{
-      number: string; anchor_id: string; heading: string | null;
-      body_xml: string; body_text: string; ord: number;
-    }[]>`
-      SELECT number, anchor_id, heading, body_xml::text AS body_xml, body_text, ord
-      FROM article WHERE state_id = ${s.state_id}
-      ORDER BY ord ASC
-    `;
-    states.push({
+  const stateIds: number[] = [];
+  const states: LoadedState[] = stateRows.map((s) => {
+    stateIds.push(s.state_id);
+    return {
       bwbId,
       eliUri: reg.eli_uri,
       type: reg.type,
@@ -134,29 +140,50 @@ async function loadRegulationFromDb(bwbId: string): Promise<LoadedRegulation | n
       citetitle: reg.citetitle,
       validFrom: s.valid_from.toISOString().slice(0, 10),
       validTo: s.valid_to.getFullYear() >= 9999 ? "9999-12-31" : s.valid_to.toISOString().slice(0, 10),
-      bodyXml: s.body_xml,
-      bodyText: s.body_text,
-      articles: articleRows.map((a) => ({
-        number: a.number,
-        anchorId: a.anchor_id,
-        heading: a.heading,
-        bodyXml: a.body_xml,
-        bodyText: a.body_text,
-        ord: a.ord,
-      })),
+      bodyXml: "",
+      bodyText: "",
+      articles: [],
       citations: [],
       sourceXmlPath: "",
-    });
-  }
+    };
+  });
 
   return {
-    bwbId,
-    ministry: reg.ministry,
-    citetitle: reg.citetitle,
-    abbreviation: reg.abbreviation,
-    type: reg.type,
-    manifestFirstInwerkingtreding: null,
-    states,
+    reg: {
+      bwbId,
+      ministry: reg.ministry,
+      citetitle: reg.citetitle,
+      abbreviation: reg.abbreviation,
+      type: reg.type,
+      manifestFirstInwerkingtreding: null,
+      states,
+    },
+    stateIds,
+  };
+}
+
+/** Laad body_xml/body_text/articles voor één state (state_id). */
+async function loadStateBody(stateId: number): Promise<{
+  bodyXml: string; bodyText: string; articles: LoadedState["articles"];
+}> {
+  const sql = getDb();
+  const [body] = await sql<{ body_xml: string; body_text: string }[]>`
+    SELECT body_xml::text AS body_xml, body_text FROM regulation_state WHERE state_id = ${stateId}
+  `;
+  const articleRows = await sql<{
+    number: string; anchor_id: string; heading: string | null;
+    body_xml: string; body_text: string; ord: number;
+  }[]>`
+    SELECT number, anchor_id, heading, body_xml::text AS body_xml, body_text, ord
+    FROM article WHERE state_id = ${stateId} ORDER BY ord ASC
+  `;
+  return {
+    bodyXml: body?.body_xml ?? "",
+    bodyText: body?.body_text ?? "",
+    articles: articleRows.map((a) => ({
+      number: a.number, anchorId: a.anchor_id, heading: a.heading,
+      bodyXml: a.body_xml, bodyText: a.body_text, ord: a.ord,
+    })),
   };
 }
 
@@ -174,8 +201,8 @@ async function main(): Promise<void> {
   const interval = toPgInterval(args.since);
   log.info("corpus-sync starting", { out: args.out, since: args.since });
 
-  const bwbIds = await affectedBwbIds(interval);
-  log.info("affected regulations", { count: bwbIds.length });
+  const bwbIds = args.only ? [args.only] : await affectedBwbIds(interval);
+  log.info("affected regulations", { count: bwbIds.length, only: args.only ?? undefined });
 
   let regsWritten = 0;
   let statesWritten = 0;
@@ -183,8 +210,9 @@ async function main(): Promise<void> {
   let skippedNoEli = 0;
 
   for (const bwbId of bwbIds) {
-    const reg = await loadRegulationFromDb(bwbId);
-    if (!reg || reg.states.length === 0) continue;
+    const loaded = await loadRegulationMeta(bwbId);
+    if (!loaded || loaded.reg.states.length === 0) continue;
+    const { reg, stateIds } = loaded;
 
     const firstEli = reg.states[0]!.eliUri;
     const ctxBase = eliToContext(firstEli);
@@ -199,8 +227,17 @@ async function main(): Promise<void> {
     catch (err) { if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err; }
 
     for (let i = 0; i < reg.states.length; i++) {
+      // Body on-demand laden, renderen, dan direct vrijgeven — houdt het
+      // geheugen begrensd tot één state (reuzen als BWBR0018715 = 9.7GB totaal).
+      const body = await loadStateBody(stateIds[i]!);
+      reg.states[i]!.bodyXml = body.bodyXml;
+      reg.states[i]!.bodyText = body.bodyText;
+      reg.states[i]!.articles = body.articles;
       const md = stateMarkdown(reg, i, ctx);
       writeFileSync(join(regDir, `${reg.states[i]!.validFrom}.md`), md);
+      reg.states[i]!.bodyXml = "";
+      reg.states[i]!.bodyText = "";
+      reg.states[i]!.articles = [];
       statesWritten++;
     }
 
