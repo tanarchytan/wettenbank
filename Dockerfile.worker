@@ -13,11 +13,9 @@ COPY src ./src
 COPY bin ./bin
 COPY migrations ./migrations
 
-# Twee scheduled jobs:
-# 1. koop-bwb-sync elke 12u (00:00 + 12:00) — primary delta-updater via FRBR feed
-# 2. sync-delta blijft op 04:00 als legacy/SRU-fallback (no-op zonder credentials)
+# Scheduled job: koop-bwb-sync elke 12u (00:00 + 12:00) — delta-updater via de
+# KOOP/OP FRBR-feed (repository.officiele-overheidspublicaties.nl).
 RUN echo "0 0,12 * * * cd /app && /usr/local/bin/bun run bin/koop-bwb-sync.ts --concurrency 4 >> /proc/1/fd/1 2>&1" > /etc/cron.d/wetten \
- && echo "0 4 * * * cd /app && /usr/local/bin/bun run bin/sync-delta.ts >> /proc/1/fd/1 2>&1" >> /etc/cron.d/wetten \
  && chmod 0644 /etc/cron.d/wetten \
  && crontab /etc/cron.d/wetten
 

@@ -82,9 +82,13 @@ Browser TTL: 1 year
 
 ## 4. Cache invalidatie bij wetupdate
 
-`bin/sync-delta.ts` (en `bin/bulk-import.ts` met `--purge` flag) triggert na een
-succesvolle UPDATE een purge-call voor de getroffen BWB-id(s). Implementatie in
-`src/cloudflare/purge.ts` met `purgeRegulations()` helper.
+De purge-helper staat in `src/cloudflare/purge.ts` (`purgeRegulations()`): een
+URL-purge voor de getroffen BWB-id(s) na een UPDATE.
+
+> **TODO / known gap:** de helper is nog NIET gewired in `bin/koop-bwb-sync.ts`.
+> De oude `sync-delta.ts` riep 'm aan; bij de overstap naar de FRBR-feed is de
+> purge-call nog niet teruggeplaatst. Tot dat gebeurt vervalt CF-cache via de
+> normale TTL (zie Cache Rules hierboven), niet direct na een wetupdate.
 
 ### Wat gepurged wordt per BWB-id
 

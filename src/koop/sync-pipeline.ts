@@ -34,6 +34,7 @@ export interface SyncRunStats {
 export async function syncOneTarget(
   client: KoopFeedClient,
   target: SyncTarget,
+  opts: { dryRun?: boolean } = {},
 ): Promise<{
   status: "304" | "ok" | "404" | "error";
   newStates: number;
@@ -70,6 +71,17 @@ export async function syncOneTarget(
     return {
       status: "ok",
       newStates: 0,
+      bytesDownloaded: manifestRes.bytesDownloaded,
+      newLastModified: manifestRes.lastModified,
+      newEtag: manifestRes.etag,
+    };
+  }
+
+  // Dry-run: rapporteer wat we ZOUDEN fetchen, maar geen state-fetch/upsert.
+  if (opts.dryRun) {
+    return {
+      status: "ok",
+      newStates: missing.length,
       bytesDownloaded: manifestRes.bytesDownloaded,
       newLastModified: manifestRes.lastModified,
       newEtag: manifestRes.etag,

@@ -2,7 +2,6 @@ export type LogLevel = "debug" | "info" | "warn" | "error";
 
 export interface Config {
   databaseUrl: string;
-  sruBaseUrl: string;
   cfApiToken: string | null;
   cfZoneId: string | null;
   logLevel: LogLevel;
@@ -23,7 +22,6 @@ export function loadConfig(): Config {
   const lvl = (process.env.LOG_LEVEL ?? "info") as LogLevel;
   return {
     databaseUrl: required("DATABASE_URL"),
-    sruBaseUrl: required("SRU_BASE_URL"),
     cfApiToken: optional("CF_API_TOKEN"),
     cfZoneId: optional("CF_ZONE_ID"),
     logLevel: lvl,

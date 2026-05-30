@@ -27,7 +27,6 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      SRU_BASE_URL: ${SRU_BASE_URL}
       CF_API_TOKEN: ${CF_API_TOKEN}
       CF_ZONE_ID: ${CF_ZONE_ID}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
@@ -60,7 +59,6 @@ services:
       # Hardcode "postgres" hostname for the worker container — Docker DNS resolves it.
       # Local Bun runs use POSTGRES_HOST=127.0.0.1 from .env instead.
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      SRU_BASE_URL: ${SRU_BASE_URL}
       CF_API_TOKEN: ${CF_API_TOKEN}
       CF_ZONE_ID: ${CF_ZONE_ID}
       LOG_LEVEL: ${LOG_LEVEL}

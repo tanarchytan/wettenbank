@@ -67,8 +67,9 @@ const config: NextConfig = {
           { key: "Cache-Control", value: "public, max-age=300, s-maxage=86400, stale-while-revalidate=604800" },
         ],
       },
-      // ELI-viewer (regelingen + states) — cacheable, geïnvalideerd per
-      // BWB-id via URL-purge in sync-delta.ts (zie src/cloudflare/purge.ts).
+      // ELI-viewer (regelingen + states) — cacheable. Invalidatie loopt nu via
+      // de cache-TTL; directe per-BWB URL-purge (src/cloudflare/purge.ts) is nog
+      // niet teruggewired in koop-bwb-sync.ts (zie cloudflared/cache-rules.md).
       // Geen Vary-header — we serveren geen taalvarianten en Vary fragmenteert
       // de edge-cache key zonder reden.
       {

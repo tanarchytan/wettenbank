@@ -22,5 +22,7 @@ RUN bun --bun next build
 ENV NODE_ENV=production
 EXPOSE 3000
 
-ENTRYPOINT ["/usr/bin/tini", "--"]
+RUN chmod +x /app/bin/docker-entrypoint.sh
+# tini = PID1 (signal reaping) → entrypoint draait migrations → exec CMD (server)
+ENTRYPOINT ["/usr/bin/tini", "--", "/app/bin/docker-entrypoint.sh"]
 CMD ["bun", "--bun", "next", "start", "-p", "3000"]

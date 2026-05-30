@@ -3,19 +3,21 @@
 -- Track conditional-request state per BWB-id zodat we If-Modified-Since
 -- kunnen sturen en 304's kunnen herkennen. Voorkomt 95%+ van de payload-
 -- transfers bij twice-daily sync.
+--
+-- IF NOT EXISTS overal zodat de migratie idempotent is (auto-migrate-on-boot).
 
 ALTER TABLE regulation
-  ADD COLUMN koop_last_checked_at   timestamptz,
-  ADD COLUMN koop_manifest_modified text,
-  ADD COLUMN koop_manifest_etag     text,
-  ADD COLUMN koop_last_status       text,    -- 'ok' | '304' | '404' | '5xx' | 'parse-error' | 'rate-limited'
-  ADD COLUMN koop_consecutive_errors int DEFAULT 0;
+  ADD COLUMN IF NOT EXISTS koop_last_checked_at    timestamptz,
+  ADD COLUMN IF NOT EXISTS koop_manifest_modified  text,
+  ADD COLUMN IF NOT EXISTS koop_manifest_etag      text,
+  ADD COLUMN IF NOT EXISTS koop_last_status        text,    -- 'ok' | '304' | '404' | '5xx' | 'parse-error' | 'rate-limited'
+  ADD COLUMN IF NOT EXISTS koop_consecutive_errors int DEFAULT 0;
 
 -- Index voor "welke BWBs zijn het langst niet gecheckt" — driver voor next-batch selection
-CREATE INDEX regulation_koop_check_idx ON regulation (koop_last_checked_at NULLS FIRST);
+CREATE INDEX IF NOT EXISTS regulation_koop_check_idx ON regulation (koop_last_checked_at NULLS FIRST);
 
 -- Tabel voor sync-runs zodat we throughput + errors kunnen meten
-CREATE TABLE koop_sync_run (
+CREATE TABLE IF NOT EXISTS koop_sync_run (
   id                bigserial PRIMARY KEY,
   started_at        timestamptz NOT NULL DEFAULT now(),
   finished_at       timestamptz,
@@ -30,4 +32,4 @@ CREATE TABLE koop_sync_run (
   notes             text
 );
 
-CREATE INDEX koop_sync_run_started_idx ON koop_sync_run (started_at DESC);
+CREATE INDEX IF NOT EXISTS koop_sync_run_started_idx ON koop_sync_run (started_at DESC);

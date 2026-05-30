@@ -12,11 +12,13 @@
  *   5. Update koop_* tracking-kolommen
  *
  * Usage:
- *   bun run bin/koop-bwb-sync.ts [--limit N] [--concurrency N] [--prefix BWBR]
+ *   bun run bin/koop-bwb-sync.ts [--limit N] [--concurrency N] [--prefix BWBR] [--dry-run]
  *
  * --limit:       max aantal BWBs deze run (default: alle, ~45607)
  * --concurrency: parallel workers (default 4, max 10)
  * --prefix:      filter op BWBR/BWBV/BWBW (default: alle)
+ * --dry-run:     fetch manifests + diff, GEEN state-fetch/upsert/DB-writes.
+ *                Rapporteert wat een echte run zou wijzigen. Gebruik met --limit.
  */
 import { parseArgs } from "node:util";
 import { closeDb } from "../src/db.ts";
@@ -32,6 +34,7 @@ interface Args {
   limit: number | null;
   concurrency: number;
   prefix: string | null;
+  dryRun: boolean;
 }
 
 function parseCli(): Args {
@@ -40,6 +43,7 @@ function parseCli(): Args {
       limit: { type: "string" },
       concurrency: { type: "string", default: "4" },
       prefix: { type: "string" },
+      "dry-run": { type: "boolean", default: false },
     },
     strict: true,
   });
@@ -47,13 +51,14 @@ function parseCli(): Args {
     limit: values.limit ? parseInt(values.limit as string, 10) : null,
     concurrency: Math.max(1, Math.min(10, parseInt(values.concurrency as string, 10) || 4)),
     prefix: (values.prefix as string) || null,
+    dryRun: values["dry-run"] as boolean,
   };
 }
 
 async function main(): Promise<void> {
   const args = parseCli();
-  const runId = await startSyncRun();
-  log.info("koop sync starting", { runId, args });
+  const runId = args.dryRun ? 0 : await startSyncRun();
+  log.info(`koop sync starting${args.dryRun ? " (DRY RUN — geen writes)" : ""}`, { runId, args });
 
   // Load targets (volg de "stale-first" policy uit sync-pipeline)
   const allTargets = await loadTargets(args.limit ?? 999_999);
@@ -85,8 +90,8 @@ async function main(): Promise<void> {
       const target = targets[idx]!;
       const startMs = Date.now();
       try {
-        const result = await syncOneTarget(client, target);
-        await recordSyncResult(target.bwbId, result);
+        const result = await syncOneTarget(client, target, { dryRun: args.dryRun });
+        if (!args.dryRun) await recordSyncResult(target.bwbId, result);
         stats.checkedCount++;
         if (result.status === "304") stats.notModifiedCount++;
         if (result.status === "ok") stats.updatedCount++;
@@ -110,14 +115,14 @@ async function main(): Promise<void> {
 
   stats.totalElapsedMs = latencies.reduce((a, b) => a + b, 0);
   stats.avgResponseMs = latencies.length > 0 ? Math.round(stats.totalElapsedMs / latencies.length) : 0;
-  await finishSyncRun(runId, stats);
+  if (!args.dryRun) await finishSyncRun(runId, stats);
 
-  console.log(`\nDone.`);
-  console.log(`  Run ID                : ${runId}`);
+  console.log(`\nDone.${args.dryRun ? "  (DRY RUN — niets geschreven)" : ""}`);
+  console.log(`  Run ID                : ${args.dryRun ? "n/a (dry-run)" : runId}`);
   console.log(`  Checked               : ${stats.checkedCount}`);
   console.log(`  Not modified (304)    : ${stats.notModifiedCount}  (${(100 * stats.notModifiedCount / Math.max(1, stats.checkedCount)).toFixed(1)}%)`);
   console.log(`  Updated               : ${stats.updatedCount}`);
-  console.log(`  New states binnen      : ${stats.newStatesCount}`);
+  console.log(`  New states ${args.dryRun ? "(zou fetchen)" : "binnen     "} : ${stats.newStatesCount}`);
   console.log(`  Errors                : ${stats.errorCount}`);
   console.log(`  Bytes downloaded      : ${(stats.bytesDownloaded / 1024 / 1024).toFixed(1)} MB`);
   console.log(`  Avg response time     : ${stats.avgResponseMs} ms`);

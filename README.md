@@ -130,12 +130,13 @@ Zie de inline doc bovenaan elk pipeline-script:
 
 | Script | Doel |
 |---|---|
-| `bin/koop-to-markdown.ts` | Unified transformer — KOOP XML → markdown én/of Postgres |
-| `bin/bulk-import.ts` | Postgres-only ingest (sneller) |
-| `bin/backfill-wti-metadata.ts` | Re-parse alleen WTI-metadata (rechtsgebied, publicatie, kamerstuk, …) zonder body-re-ingest |
+| `bin/bulk-import.ts` | Baseline-ingest uit KOOP zip-dump → Postgres (`--dir <wetten-root>`) |
+| `bin/koop-to-markdown.ts` | Unified transformer — KOOP XML → markdown én/of Postgres (initiële dump) |
+| `bin/backfill-wti-metadata.ts` | Re-parse alleen WTI-metadata (ministerie, rechtsgebied, publicatie, kamerstuk, …) uit lokale dump, zonder body-re-ingest |
 | `bin/index-eli.ts` | Pre-resolve slug-collisions in `.eli-index.json` |
-| `bin/sync-delta.ts` | KOOP SRU delta-feed + CF-purge |
-| `bin/migrate.ts` | SQL-migraties uit `migrations/*.sql` |
+| `bin/koop-bwb-sync.ts` | **Delta-updater.** Bron = KOOP/OP FRBR-feed `repository.officiele-overheidspublicaties.nl/bwb/<BWBR>` (NIET de SRU op `repository.overheid.nl`). Conditional `If-Modified-Since` + tier-scheduling. 2× daags cron |
+| `bin/sync-corpus.ts` | DB-driven markdown-delta → commit/push corpus-repo. Driver: `regulation_state.ingested_at` |
+| `bin/migrate.ts` | SQL-migraties uit `migrations/*.sql` (idempotent, draait auto bij container-boot) |
 
 ## Cloudflare Tunnel
 

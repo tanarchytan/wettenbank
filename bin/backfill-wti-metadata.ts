@@ -100,8 +100,15 @@ async function main(): Promise<void> {
 
       const jci = `jci1.3:c:${bwbId}`;
 
+      // Update ook ministry/abbreviation/citetitle. Bulk-import had deze
+      // historisch niet altijd correct ingelezen (parser is sindsdien
+      // verbeterd); coalesce zorgt dat we bestaande non-null waarden
+      // niet overschrijven met null als de huidige parse niets geeft.
       await sql`
         UPDATE regulation SET
+          ministry            = coalesce(${wti.ministry}, ministry),
+          abbreviation        = coalesce(${wti.abbreviation}, abbreviation),
+          citetitle           = coalesce(${wti.citetitle}, citetitle),
           rechtsgebied        = ${pgTextArray(wti.rechtsgebied)}::text[],
           overheidsdomein     = ${pgTextArray(wti.overheidsdomein)}::text[],
           wetsfamilie         = ${wti.wetsfamilie},
