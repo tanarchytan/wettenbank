@@ -41,8 +41,9 @@ export default function OverPage() {
 
       <DocH2>Techniek</DocH2>
       <p>
-        Open-source pijplijn (Bun + Next.js + PostgreSQL) met dagelijkse delta-sync van de
-        KOOP SRU-feed. Volledige technische documentatie in de repository.
+        Open-source pijplijn (Bun + Next.js + PostgreSQL) met tweemaal daagse delta-sync van de
+        officiële KOOP-publicatiefeed van het Basis Wetten Bestand. Volledige technische
+        documentatie in de repository.
       </p>
     </DocPage>
   );

@@ -14,7 +14,12 @@ export function getDb(): SQL {
     // mid-flight produced "Idle timeout reached after 30s" errors during bulk-import.
     // Override via DB_IDLE_TIMEOUT=0 to disable entirely.
     idleTimeout,
-    onclose: () => { _sql = null; },
+    // GEEN onclose-handler die _sql=null zet: die fired per gesloten pool-
+    // connectie (idle-timeout / server-reap), niet alleen bij volledige
+    // pool-sluiting. Het nullen zorgde dat de volgende getDb() een NIEUWE pool
+    // bouwde en de oude connecties verweesde -> connectie-accumulatie tot
+    // "too many clients" in langlopende processen. Bun.SQL's pool reconnect
+    // dode connecties zelf op de volgende query. closeDb() nullt expliciet.
   });
   return _sql;
 }

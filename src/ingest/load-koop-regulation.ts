@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseBwbXml, type ParsedRegulation } from "./parse-bwb-xml.ts";
 import { parseWti, type ParsedWti } from "./parse-wti.ts";
-import { parseManifest, type ManifestState } from "./parse-manifest.ts";
+import { parseManifest } from "./parse-manifest.ts";
 
 export interface LoadedState extends ParsedRegulation {
   sourceXmlPath: string;
@@ -57,7 +57,10 @@ function readHeader(dir: string): { header: RegulationHeader; wti: ParsedWti } {
   const bwbId = manifest.bwbId || wti.bwbId;
 
   const states = manifest.states
-    .filter((s) => s.xmlFilename)
+    // Skip ingetrokken expressies (item _deleted="true"): hun XML zit niet in
+    // de dump en wordt door de feed niet geserveerd. Expliciet i.p.v. leunen
+    // op file-absence, en consistent met de delta-sync (zie diffManifest).
+    .filter((s) => s.xmlFilename && !s.deleted)
     .map((s) => ({
       label: s.label,
       validFrom: s.validFrom,

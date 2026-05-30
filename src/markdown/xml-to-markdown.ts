@@ -36,23 +36,6 @@ type ONode = Record<string, unknown>; // ordered node: { tagName: children[], ":
 
 // ------------------------------------------------------------------ helpers
 
-function attrs(node: ONode): Record<string, string> {
-  const a = node[":@"] as Record<string, unknown> | undefined;
-  if (!a) return {};
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(a)) {
-    out[k] = String(v ?? "");
-  }
-  return out;
-}
-
-function children(node: ONode, tag: string): ONode[] {
-  const c = node[tag];
-  if (!c) return [];
-  if (Array.isArray(c)) return c as ONode[];
-  return [c as ONode];
-}
-
 /**
  * Get all child nodes from an ordered-node's content array.
  * The parser emits: [{ tagName: [...children], ":@": attrs }, ...]

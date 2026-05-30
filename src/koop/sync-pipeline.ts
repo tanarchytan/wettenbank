@@ -1,6 +1,6 @@
 import { getDb } from "../db.ts";
 import { KoopFeedClient } from "./feed-client.ts";
-import { diffManifest, type MissingState } from "./manifest-diff.ts";
+import { diffManifest } from "./manifest-diff.ts";
 import { parseBwbXml } from "../ingest/parse-bwb-xml.ts";
 import { upsertRegulation } from "../ingest/upsert.ts";
 import { log } from "../log.ts";
@@ -22,6 +22,8 @@ export interface SyncRunStats {
   updatedCount: number;
   newStatesCount: number;
   errorCount: number;
+  /** BWBs met ≥1 gefaalde state — staan op backoff-retry, niet gedropt. */
+  incompleteCount: number;
   bytesDownloaded: number;
   totalElapsedMs: number;
   avgResponseMs: number;
@@ -37,6 +39,10 @@ export async function syncOneTarget(
   opts: { dryRun?: boolean } = {},
 ): Promise<{
   status: "304" | "ok" | "404" | "error";
+  /** True als ≥1 missende state niet kon worden binnengehaald/geparsed. */
+  incomplete: boolean;
+  /** Aantal states dat we wél hadden moeten halen maar faalde. */
+  failedStates: number;
   newStates: number;
   bytesDownloaded: number;
   newLastModified: string | null;
@@ -50,6 +56,8 @@ export async function syncOneTarget(
   if (manifestRes.notModified) {
     return {
       status: "304",
+      incomplete: false,
+      failedStates: 0,
       newStates: 0,
       bytesDownloaded: 0,
       newLastModified: target.lastModified,
@@ -58,18 +66,20 @@ export async function syncOneTarget(
   }
 
   if (manifestRes.status === 404) {
-    return { status: "404", newStates: 0, bytesDownloaded: 0, newLastModified: null, newEtag: null };
+    return { status: "404", incomplete: false, failedStates: 0, newStates: 0, bytesDownloaded: 0, newLastModified: null, newEtag: null };
   }
 
   if (manifestRes.status !== 200 || !manifestRes.body) {
-    return { status: "error", newStates: 0, bytesDownloaded: manifestRes.bytesDownloaded, newLastModified: null, newEtag: null };
+    return { status: "error", incomplete: false, failedStates: 0, newStates: 0, bytesDownloaded: manifestRes.bytesDownloaded, newLastModified: null, newEtag: null };
   }
 
   // Stap 2: diff
-  const missing = diffManifest(manifestRes.body, target.knownValidFroms);
+  const missing = diffManifest(manifestRes.body, target.knownValidFroms, target.bwbId);
   if (missing.length === 0) {
     return {
       status: "ok",
+      incomplete: false,
+      failedStates: 0,
       newStates: 0,
       bytesDownloaded: manifestRes.bytesDownloaded,
       newLastModified: manifestRes.lastModified,
@@ -81,6 +91,8 @@ export async function syncOneTarget(
   if (opts.dryRun) {
     return {
       status: "ok",
+      incomplete: false,
+      failedStates: 0,
       newStates: missing.length,
       bytesDownloaded: manifestRes.bytesDownloaded,
       newLastModified: manifestRes.lastModified,
@@ -90,11 +102,13 @@ export async function syncOneTarget(
 
   // Stap 3: per missende state — fetch + upsert
   let newStatesProcessed = 0;
+  let failedStates = 0;
   let bytesDownloaded = manifestRes.bytesDownloaded;
   for (const state of missing) {
     const stateRes = await client.fetchState(target.bwbId, state.label, state.xmlFilename);
     bytesDownloaded += stateRes.bytesDownloaded;
     if (stateRes.status !== 200 || !stateRes.body) {
+      failedStates++;
       log.warn("koop state fetch failed", {
         bwbId: target.bwbId, state: state.label, status: stateRes.status,
       });
@@ -110,6 +124,7 @@ export async function syncOneTarget(
       await upsertRegulation(parsed);
       newStatesProcessed++;
     } catch (err) {
+      failedStates++;
       log.warn("koop state parse/upsert failed", {
         bwbId: target.bwbId,
         state: state.label,
@@ -118,12 +133,20 @@ export async function syncOneTarget(
     }
   }
 
+  // Policy: alles moet verwerkt worden. Bij ≥1 gefaalde state NIET de
+  // manifest-pointer avancen — dan geeft de volgende run geen 304 maar 200,
+  // re-diff't, en retry't precies de nog-missende states (de reeds-binnen-
+  // gehaalde worden door diffManifest tegen knownValidFroms overgeslagen).
+  // recordSyncResult plaatst de BWB met backoff achter in de queue.
+  const incomplete = failedStates > 0;
   return {
     status: "ok",
+    incomplete,
+    failedStates,
     newStates: newStatesProcessed,
     bytesDownloaded,
-    newLastModified: manifestRes.lastModified,
-    newEtag: manifestRes.etag,
+    newLastModified: incomplete ? target.lastModified : manifestRes.lastModified,
+    newEtag: incomplete ? target.etag : manifestRes.etag,
   };
 }
 
@@ -207,38 +230,51 @@ export async function recordSyncResult(
     newLastModified: string | null;
     newEtag: string | null;
     newStates: number;
+    /** ≥1 missende state faalde — partial success, moet opnieuw. */
+    incomplete?: boolean;
   },
 ): Promise<void> {
   const sql = getDb();
   const status = result.status;
-  const isError = status === "error" || status === "404";
+  const hardError = status === "error" || status === "404";
+  // Retryable failure = harde fout OF een partial (incomplete) ingest. Beide
+  // moeten met backoff opnieuw; policy: alles moet uiteindelijk verwerkt zijn.
+  const isFailure = hardError || result.incomplete === true;
 
-  // Read activity-signaal: dagen sinds laatste state-change
-  const [activityRow] = await sql<{ days_since: number }[]>`
-    SELECT extract(epoch FROM (now() - max(valid_from)::timestamp)) / 86400 AS days_since
-    FROM regulation_state WHERE bwb_id = ${bwbId}
+  // Read activity-signaal (dagen sinds laatste state) + huidige error-count
+  // voor de backoff-trap.
+  const [activityRow] = await sql<{ days_since: number | null; errs: number }[]>`
+    SELECT
+      extract(epoch FROM (now() - max(s.valid_from)::timestamp)) / 86400 AS days_since,
+      (SELECT coalesce(koop_consecutive_errors, 0) FROM regulation WHERE bwb_id = ${bwbId}) AS errs
+    FROM regulation_state s WHERE s.bwb_id = ${bwbId}
   `;
   const daysSince = activityRow?.days_since ?? 0;
+  const priorErrs = Number(activityRow?.errs ?? 0);
   const { tier, nextCheckInMinutes } = computeTierAndNext(daysSince, result.newStates > 0);
 
-  // Bij errors: exponential backoff op next_check
-  // (1 error: +1h, 2 errors: +2h, 3 errors: +4h, ..., cap 24h)
+  // Tracking-status: onderscheid 'partial' (deels gelukt) van 'ok'.
+  const effStatus = result.incomplete && !hardError ? "partial" : status;
+
+  // Bij failure: exponential backoff op next_check, op basis van het aantal
+  // opeenvolgende failures. 1e: +1h, 2e: +2h, 3e: +4h, 4e: +8h, 5e+: +16h,
+  // cap 24h. Nooit permanent gedropt — blijft achteraan de queue terugkomen.
   let actualNextMinutes = nextCheckInMinutes;
-  if (isError) {
-    // We hoeven errors_count niet voorlopig op te halen — bereken inline
-    actualNextMinutes = Math.min(24 * 60, 60 * 2 ** Math.min(4, 0));
+  if (isFailure) {
+    const attempt = priorErrs + 1;
+    actualNextMinutes = Math.min(24 * 60, 60 * 2 ** Math.min(4, attempt - 1));
   }
 
   await sql`
     UPDATE regulation SET
       koop_last_checked_at = now(),
-      koop_last_status = ${status},
+      koop_last_status = ${effStatus},
       koop_manifest_modified = ${result.newLastModified},
       koop_manifest_etag = ${result.newEtag},
       koop_tier = ${tier},
       koop_next_check_at = now() + (${actualNextMinutes}::int * interval '1 minute'),
       koop_consecutive_errors = CASE
-        WHEN ${isError} THEN coalesce(koop_consecutive_errors, 0) + 1
+        WHEN ${isFailure} THEN coalesce(koop_consecutive_errors, 0) + 1
         ELSE 0
       END
     WHERE bwb_id = ${bwbId}

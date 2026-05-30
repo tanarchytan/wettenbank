@@ -110,6 +110,8 @@ async function main(): Promise<void> {
   });
   const perTier = parseInt(values["per-tier"] as string, 10) || 100;
   const concurrency = Math.max(1, Math.min(8, parseInt(values.concurrency as string, 10) || 3));
+  // Bound DB-pool aan concurrency (zie koop-bwb-sync.ts) — connectiehygiëne.
+  if (!process.env.DB_POOL_MAX) process.env.DB_POOL_MAX = String(concurrency + 2);
   log.info("drift-sample starting (DRY RUN)", { perTier, concurrency });
 
   const client = new KoopFeedClient({ concurrency });

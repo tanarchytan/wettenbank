@@ -14,7 +14,7 @@
  *                   than manifest.xml (incremental/resumable runs).
  */
 
-import { readdirSync, mkdirSync, existsSync, appendFileSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, existsSync, appendFileSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, dirname, basename } from "node:path";
 import { cpus } from "node:os";
 import { Worker } from "node:worker_threads";

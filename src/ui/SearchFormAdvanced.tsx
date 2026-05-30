@@ -133,7 +133,7 @@ export function SearchFormAdvanced({ defaults }: Props) {
                 name="overheidsdomein"
                 buttonLabel="Overheidsthema's"
                 title="Kies overheidsthema's"
-                options={OVERHEIDSDOMEINEN.map(([code, label]) => ({ code: label, label }))}
+                options={OVERHEIDSDOMEINEN.map(([, label]) => ({ code: label, label }))}
                 defaults={arr(d.overheidsdomein)}
               />
             </div>
@@ -152,7 +152,7 @@ export function SearchFormAdvanced({ defaults }: Props) {
                 name="verdragThema"
                 buttonLabel="Thema's verdragen"
                 title="Kies thema's verdragen"
-                options={VERDRAG_THEMAS.map(([code, label]) => ({ code: label, label }))}
+                options={VERDRAG_THEMAS.map(([, label]) => ({ code: label, label }))}
                 defaults={arr(d.verdragThema)}
               />
             </div>

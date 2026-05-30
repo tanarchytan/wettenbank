@@ -5,6 +5,12 @@ export interface ManifestState {
   validFrom: string;   // YYYY-MM-DD
   validTo: string;     // YYYY-MM-DD, or "9999-12-31" if absent
   xmlFilename: string; // "BWBR0001840_2023-02-22_0.xml"
+  /**
+   * KOOP markeert ingetrokken/vervangen expressies met item _deleted="true".
+   * De XML wordt dan niet meer geserveerd (self-redirect 301-loop). Zulke
+   * states moeten NIET gefetcht worden — zie diffManifest.
+   */
+  deleted: boolean;
 }
 
 export interface ParsedManifest {
@@ -60,8 +66,9 @@ export function parseManifest(xml: string): ParsedManifest {
     const validToRaw = asStr(expMeta["einddatum"]);
     const validTo = validToRaw || "9999-12-31";
 
-    // manifestation[label=xml]/item/@_label
+    // manifestation[label=xml]/item/@_label  (+ _deleted vlag)
     let xmlFilename = "";
+    let deleted = false;
     const manifestRaw = e["manifestation"];
     const manifestations = Array.isArray(manifestRaw)
       ? manifestRaw
@@ -75,13 +82,20 @@ export function parseManifest(xml: string): ParsedManifest {
         const item = (Array.isArray(itemRaw) ? itemRaw[0] : itemRaw) as
           | Record<string, unknown>
           | undefined;
-        if (item) xmlFilename = asStr(item["@_label"]);
+        if (item) {
+          xmlFilename = asStr(item["@_label"]);
+          // Attribuut heet _deleted → fast-xml-parser maakt er @__deleted van
+          // (prefix @_ + naam _deleted), net als @__latestItem.
+          deleted =
+            asStr(item["@__deleted"]) === "true" ||
+            asStr(item["@_deleted"]) === "true";
+        }
         break;
       }
     }
 
     if (label && validFrom) {
-      states.push({ label, validFrom, validTo, xmlFilename });
+      states.push({ label, validFrom, validTo, xmlFilename, deleted });
     }
   }
 

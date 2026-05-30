@@ -57,6 +57,15 @@ function parseCli(): Args {
 
 async function main(): Promise<void> {
   const args = parseCli();
+
+  // Bound de DB-pool aan de worker-concurrency (+2 headroom voor de
+  // startSyncRun/recordSyncResult-overhead). Voorkomt dat deze job de
+  // Postgres-connectielimiet opvreet naast app/worker-pools. Moet vóór de
+  // eerste getDb()-call gezet worden (getDb leest env bij lazy construct).
+  if (!process.env.DB_POOL_MAX) {
+    process.env.DB_POOL_MAX = String(args.concurrency + 2);
+  }
+
   const runId = args.dryRun ? 0 : await startSyncRun();
   log.info(`koop sync starting${args.dryRun ? " (DRY RUN — geen writes)" : ""}`, { runId, args });
 
@@ -76,6 +85,7 @@ async function main(): Promise<void> {
     updatedCount: 0,
     newStatesCount: 0,
     errorCount: 0,
+    incompleteCount: 0,
     bytesDownloaded: 0,
     totalElapsedMs: 0,
     avgResponseMs: 0,
@@ -96,6 +106,7 @@ async function main(): Promise<void> {
         if (result.status === "304") stats.notModifiedCount++;
         if (result.status === "ok") stats.updatedCount++;
         if (result.status === "404" || result.status === "error") stats.errorCount++;
+        if (result.incomplete) stats.incompleteCount++;
         stats.newStatesCount += result.newStates;
         stats.bytesDownloaded += result.bytesDownloaded;
         latencies.push(Date.now() - startMs);
@@ -123,6 +134,7 @@ async function main(): Promise<void> {
   console.log(`  Not modified (304)    : ${stats.notModifiedCount}  (${(100 * stats.notModifiedCount / Math.max(1, stats.checkedCount)).toFixed(1)}%)`);
   console.log(`  Updated               : ${stats.updatedCount}`);
   console.log(`  New states ${args.dryRun ? "(zou fetchen)" : "binnen     "} : ${stats.newStatesCount}`);
+  console.log(`  Incomplete (retry)    : ${stats.incompleteCount}  (≥1 state faalde, op backoff-retry)`);
   console.log(`  Errors                : ${stats.errorCount}`);
   console.log(`  Bytes downloaded      : ${(stats.bytesDownloaded / 1024 / 1024).toFixed(1)} MB`);
   console.log(`  Avg response time     : ${stats.avgResponseMs} ms`);

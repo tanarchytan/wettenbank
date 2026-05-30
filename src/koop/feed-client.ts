@@ -56,7 +56,6 @@ const DEFAULT_CONFIG: RateLimiterConfig = {
 class AdaptiveLimiter {
   private currentRps: number;
   private slot = 0;
-  private lastTick = Date.now();
   private activeRequests = 0;
   private recentLatencies: number[] = [];
   private recentErrors: boolean[] = [];
@@ -156,7 +155,6 @@ export class KoopFeedClient {
   ): Promise<FeedResponse> {
     await this.limiter.acquire();
     const startMs = Date.now();
-    let isError = false;
     try {
       const headers: Record<string, string> = { "User-Agent": USER_AGENT };
       if (conditional?.lastModified) headers["If-Modified-Since"] = conditional.lastModified;
@@ -206,7 +204,6 @@ export class KoopFeedClient {
 
       // 429 / 5xx — retry met exponential backoff
       if (res.status === 429 || res.status >= 500) {
-        isError = true;
         this.limiter.release(elapsedMs, true);
         if (attempt < DEFAULT_CONFIG.maxRetries) {
           const backoff = Math.min(60_000, DEFAULT_CONFIG.backoffBaseMs * 2 ** attempt);
@@ -228,7 +225,6 @@ export class KoopFeedClient {
       };
     } catch (err) {
       const elapsedMs = Date.now() - startMs;
-      isError = true;
       this.limiter.release(elapsedMs, true);
       if (attempt < DEFAULT_CONFIG.maxRetries) {
         const backoff = Math.min(60_000, DEFAULT_CONFIG.backoffBaseMs * 2 ** attempt);

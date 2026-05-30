@@ -122,7 +122,7 @@ export function readmeMarkdown(
 
   // Version table — newest first
   const sorted = [...reg.states].reverse();
-  const tableRows = sorted.map((s, i) => {
+  const tableRows = sorted.map((s) => {
     const from = s.validFrom;
     const to = s.validTo === "9999-12-31" ? "heden" : s.validTo;
     return `| ${from} | ${to} | [${from}.md](./${from}.md) |`;

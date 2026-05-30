@@ -149,7 +149,6 @@ writeFileSync(OUT, JSON.stringify(index));
 
 const elapsed = ((performance.now() - start) / 1000).toFixed(0);
 const indexedCount = Object.keys(index).length;
-const fileSizeKb = (Buffer.byteLength(JSON.stringify(index)) / 1024).toFixed(0);
 const fileSizeMb = (Buffer.byteLength(JSON.stringify(index)) / 1024 / 1024).toFixed(1);
 
 console.log(`Indexed ${indexedCount} regulations in ${elapsed}s (${skipped} skipped)`);

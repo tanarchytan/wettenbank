@@ -40,14 +40,16 @@ const parser = new XMLParser({
   parseTagValue: false,
   trimValues: true,
   preserveOrder: false,
-  // BWB regulations can be very large (e.g. Civil Code) with many entity refs.
-  // Default caps trigger "Entity expansion limit exceeded" on ~0.005% of corpus.
-  // Raised generously while still well below billion-laughs attack territory.
+  // BWB regulations can be very large with veel entity-refs. Bv. "Besluit
+  // activiteiten leefomgeving" (BWBR0041330): 14 MB XML, 112k &amp;-entities —
+  // overschreed zowel de 100k-expansion- als de 10MB-cap, waardoor de recente
+  // states niet parsten. KOOP is een vertrouwde HTTPS-bron, dus ruim verhoogd;
+  // maxExpandedLength blijft de geheugen-guard tegen billion-laughs.
   processEntities: {
     enabled: true,
-    maxTotalExpansions: 100000,
-    maxExpandedLength: 10_000_000,
-    maxEntitySize: 100000,
+    maxTotalExpansions: 5_000_000,
+    maxExpandedLength: 100_000_000,
+    maxEntitySize: 1_000_000,
   },
 });
 
@@ -124,26 +126,6 @@ function numberFromVariabelDeel(vd: string): string {
   // Match "Artikel" followed by anything (number or Roman numeral)
   const m = last.match(/^[Aa]rtikel(.+)$/);
   return m ? m[1]! : "";
-}
-
-/**
- * Extract the context segment (hoofdstuk/paragraaf) from a variabel-deel path.
- * "/Hoofdstuk1"              => "Hoofdstuk1"
- * "/Hoofdstuk2/Paragraaf1"   => "Paragraaf1" (outermost already pushed by parent)
- */
-function ctxSegmentFromVariabelDeel(vd: string): string {
-  const parts = vd.split("/").filter(Boolean);
-  return parts[parts.length - 1] ?? "";
-}
-
-/** Detect if element is a container (hoofdstuk, paragraaf, afdeling, etc.) */
-function isContainerNode(obj: Record<string, unknown>): boolean {
-  // Real schema: has bwb-ng-variabel-deel but NOT artikel content, and has
-  // at least one of: artikel, paragraaf, afdeling as child keys
-  const vd = asString(obj["@_bwb-ng-variabel-deel"]);
-  if (!vd) return false;
-  const last = vd.split("/").pop() ?? "";
-  return /^(Hoofdstuk|Paragraaf|Afdeling|Titel|Boek|Deel)\d*$/i.test(last);
 }
 
 /**
